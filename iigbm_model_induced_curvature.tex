@@ -1,0 +1,555 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,booktabs,hyperref}
+\usepackage{graphicx}
+\usepackage{microtype}
+\hypersetup{colorlinks=true,citecolor=blue,urlcolor=blue,linkcolor=blue}
+
+\newcommand{\IIGBM}{\textsc{IIGBM}}
+\newcommand{\E}{\mathbb{E}}
+
+\title{Inherently Interpretable Gradient Boosting Machines:\\
+Functional ANOVA, Model-Induced Kernels and Component Curvature}
+\author{Nupur Krishnan \and Agus Sudjianto}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Gradient boosted decision trees (GBDTs) predict well on tabular data but hide
+how they combine features. We build a GBDT whose every explanatory object comes
+from the fitted model itself. The workflow fits an additive GBDT with one
+semantic feature group per tree, screens residual interactions with depth-two
+trees and fits a deep residual model constrained to the screened pairs.
+Functional ANOVA (fANOVA) reads off interaction order and component importance.
+For each fANOVA component we build a positive semidefinite (PSD) kernel from the
+component's own model responses and apply its graph Laplacian to the component
+values, giving a local curvature that measures how sharply the learned effect
+changes across inputs the model treats as similar. Importance says which learned
+effects carry weight; curvature says whether an effect is broad and smooth or
+localized and steep. We validate the curvature on planted interactions of known
+shape and show it ranks a localized effect above a smooth one even when the
+localized effect is eight times weaker. On California housing and bikeshare the
+two quantities separate a dominant smooth spatial interaction from weak but
+sharp calendar regimes. Every kernel and graph is induced by the fitted model;
+no raw-feature similarity graph or surrogate is used.
+\end{abstract}
+
+\medskip
+\noindent\textbf{Keywords:} inherently interpretable models; gradient boosting;
+functional ANOVA; model-induced kernel; leaf co-membership kernel; graph-Laplacian
+curvature; interaction detection; component importance.
+
+\section{Introduction}
+
+A fitted GBDT reports which features it splits on, but not how it combines them
+into effects a domain expert can read. Global gain measures rank features
+without describing the shape of an effect. Similarity graphs built from raw
+input coordinates describe the data geometry, not the model's. We take a
+model-centric route: the explanation, the kernel, the graph and the curvature
+are all derived from the fitted GBDT.
+
+The starting point is the fANOVA reading of tree ensembles. Tree depth bounds
+the maximum interaction order, so a boosted ensemble can be read as a functional
+ANOVA model rather than an opaque predictor \cite{Sudjianto2025,Hu2023}. A
+depth-one ensemble is a generalized additive model (GAM); a depth-two ensemble
+adds pairwise interactions; deeper trees express higher-order terms. Interaction
+order is therefore a structural property of the model, available before any
+attribution.
+
+We add a geometric question about an identified fANOVA component: whether its
+learned shape is broad and smooth or steep and localized. A PSD kernel built
+from the component's own model responses, with a normalized graph-Laplacian
+curvature of the component values, measures it. The measure is not causal and
+is not Ollivier--Ricci curvature; it quantifies the local roughness of a known
+fANOVA component. Section~\ref{sec:curvature} defines it and validates it against
+interactions whose shape we control.
+
+Contributions:
+\begin{enumerate}
+\item a hierarchical \IIGBM{} construction: an additive GBDT, a depth-two
+residual interaction screen and a screened deep residual model;
+\item PSD kernels induced by the deep model's fANOVA interaction-contrast feature
+maps;
+\item a component curvature from the component's kernel graph, validated on
+planted smooth and localized interactions with a permutation null and stability
+checks; and
+\item studies on California housing and bikeshare that separate importance from
+local shape.
+\end{enumerate}
+
+\section{Inherently Interpretable GBDT Construction}
+
+\subsection{Stage I: additive tree ensemble}
+
+Let $x=(x_1,\ldots,x_p)$ and let $y$ be the transformed response. We fit an
+XGBoost ensemble in which each tree may split only within one semantic feature
+group. A tree can use several splits of its group but cannot combine two groups,
+so the ensemble is a GAM,
+\begin{equation}
+ f_1(x)=\beta_0+\sum_{j=1}^{p} f_j(x_j).
+\end{equation}
+Deep univariate trees fit flexible nonlinear main effects while additivity holds
+exactly.
+
+\subsection{Stage II: residual interaction screening}
+
+To keep in-sample GAM artifacts from masquerading as interactions, we form
+out-of-fold predictions $\hat f_1^{\mathrm{OOF}}$ and fit a depth-two GBDT to the
+residual
+\begin{equation}
+ r^{\mathrm{OOF}}=y-\hat f_1^{\mathrm{OOF}}(x).
+\end{equation}
+In a depth-two tree the root and each child split give a candidate feature pair.
+We aggregate child-split gains to rank pairs. This stage screens; it does not
+supply the explanatory kernel.
+
+\subsection{Stage III: screened deep residual model}
+
+We refit the GAM on all training data and fit a deep residual model
+\begin{equation}
+ g_{\mathrm{deep}}(x)\approx y-f_1(x),
+ \qquad
+ f(x)=f_1(x)+g_{\mathrm{deep}}(x),
+\end{equation}
+with XGBoost interaction constraints drawn from the screened pairs. Overlapping
+pairs are allowed, which lets the deep model compose higher-order terms where the
+data support them. Stage II supplies an interpretable interaction prior; the
+final deep model refines it.
+
+\section{Functional ANOVA and Model-Induced Kernels}
+
+\subsection{fANOVA components and importance}
+
+Fix a reference measure $P_X$ with density $w$. Decompose the deep residual model
+\begin{equation}
+ g_{\mathrm{deep}}(x)=\sum_{S\subseteq\{1,\ldots,p\}}g_S(x_S),
+\end{equation}
+where $g_S$ is the fANOVA component on feature subset $S$. Components are centered
+under the reference, $\E[g_S(X_S)]=0$, so component importance is the variance
+\begin{equation}
+ A_S=\mathrm{Var}\!\left(g_S(X_S)\right)=\E\!\left[g_S(X_S)^2\right].
+\end{equation}
+Centering matters in practice: without it a residual constant inflates
+$A_S$. In our California study the Latitude$\times$Longitude contrast carried an
+offset of roughly $0.9$ standard deviations; centering the component before
+measuring $A_S$ cut its reported energy from $0.0136$ to $0.0075$ and left the
+curvature unchanged (curvature is offset-invariant; Section~\ref{sec:curvature}).
+
+We estimate components with a finite empirical background rather than an exact
+purification. Given background draws $B^{(1)},\ldots,B^{(M)}$, define for a pair
+$S=\{j,k\}$
+\begin{equation}
+ \Psi_{jk,m}(x)=g_{\mathrm{deep}}(x_j,x_k,B^{(m)}_{-jk})
+ -g_{\mathrm{deep}}(x_j,B^{(m)}_{-j})
+ -g_{\mathrm{deep}}(x_k,B^{(m)}_{-k})
+ +g_{\mathrm{deep}}(B^{(m)}).
+\label{eq:contrast}
+\end{equation}
+The component estimate is $\hat g_{jk}(x)=M^{-1}\sum_m\Psi_{jk,m}(x)$, centered
+over the evaluation set. The reference measure is the joint empirical background,
+so under correlated predictors the components are not exactly orthogonal; exact
+tree-term aggregation and purification would remove the residual dependence
+\cite{Hooker2007,Lengerich2020,Hu2023}.
+
+\subsection{Hierarchical orthogonality}
+\label{sec:ortho}
+
+Fitting interactions on the GAM residual is what makes the importances behave
+like a decomposition. The hierarchical-orthogonality proposition of Hu et
+al.~\cite{Hu2023} states that if the lower-order terms minimize the weighted
+projection $\int\!\big(f-\sum_j f_{-j}\big)^2 w\,dx$, the residual
+$\tilde f=f-\sum_j f_{-j}$ is orthogonal to every lower-dimensional function
+$h$: $\int \tilde f(x)\,h(x_{-j})\,w(x)\,dx=0$. The argument is variational: a
+nonzero inner product would let a small multiple of $h$ lower the projection
+loss, contradicting optimality. Stage III fits within this orthogonal
+complement, so its interaction components are orthogonal to the main effects
+under the reference measure by construction.
+
+We check the finite-sample gap directly. On California housing, the empirical
+correlation between each main effect and each pair component has mean $0.070$
+across all pairs, and the pair components are mutually near-orthogonal
+(mean $|{\rm corr}|=0.058$). One pair reaches $0.441$ against a main effect: the
+correlated-feature regime where XGBoost does not solve the weighted projection
+exactly. The mean near zero is consistent with the proposition; the residual
+leakage marks where purification would help.
+
+\subsection{From trees to kernels}
+\label{sec:treekernel}
+
+A fitted tree induces a kernel on its own, before any of the fANOVA machinery.
+Route an input $x$ to its terminal leaf $\ell(x)$ and write the one-hot leaf
+embedding $z(x)=e_{\ell(x)}\in\{0,1\}^L$, a vector with a single one in the
+coordinate of the leaf $x$ lands in. The leaf co-membership kernel is the inner
+product of these embeddings,
+\begin{equation}
+ K_T(x,x')=z(x)^\top z(x')=\mathbf 1\{\ell(x)=\ell(x')\},
+\end{equation}
+one when two points share a leaf and zero otherwise. Stacking $n$ points into a
+matrix $Z$ with rows $z(x_i)^\top$ gives the Gram matrix $K=ZZ^\top$, so $K_T$ is
+PSD by construction. An ensemble of $M$ trees stacks the per-tree embeddings into
+a feature map
+$\phi_{\mathrm{GBDT}}(x)=(\sqrt{\alpha_1}\,z_1(x)^\top,\ldots,\sqrt{\alpha_M}\,z_M(x)^\top)^\top$
+and sums the co-membership kernels,
+\begin{equation}
+ K_{\mathrm{GBDT}}(x,x')=\sum_{t=1}^M \alpha_t\,z_t(x)^\top z_t(x'),
+\end{equation}
+which with $\alpha_t=1/M$ counts the fraction of trees that route two points to
+the same leaf. Similarity is supervised and model-induced: two inputs are close
+when the fitted ensemble repeatedly places them together, not when they are near
+in raw coordinates \cite{SudjiantoZhang2026}.
+
+\subsection{PSD component kernels}
+
+The component kernel keeps this recipe --- a model-induced feature map, PSD as an
+inner product --- but replaces the raw leaf indicators with the deep model's
+interaction responses, so the geometry isolates one fANOVA component instead of
+the full partition. The contrast vector
+$\Psi_S(x)=(\Psi_{S,1}(x),\ldots,\Psi_{S,M}(x))^\top$ plays the role of the
+feature map, and
+\begin{equation}
+ K_S(x,x')=\frac{1}{M}\Psi_S(x)^\top\Psi_S(x')
+\label{eq:kernel}
+\end{equation}
+is PSD by the same Gram-matrix argument. Where the leaf-membership map $z(x)$
+records which region $x$ occupies, $\Psi_S(x)$ records how the deep model's
+prediction moves when features $S$ are set to $x$ against a background. Two points
+are close under $K_S$ when that interaction response matches, not merely when they
+share leaves.
+
+\section{Component Curvature}
+\label{sec:curvature}
+
+\subsection{What the curvature measures, in words}
+
+Each component $g_S$ gives every input one number: the size of the learned
+interaction there. We ask whether that number changes gently or abruptly between
+inputs the model treats as similar. Two ingredients make this precise. First,
+``similar'' is the component's own kernel: keep, for each point, its $k$ nearest
+neighbors in the feature-map space $\Psi_S(x)/\sqrt{M}$. Second, at each point
+take the weighted average of its neighbors' component values and subtract it from
+the point's own value. Where the effect is locally flat the point sits near its
+neighborhood average and the difference is small; where the effect steps or
+spikes (a threshold, a narrow peak), the point departs from its neighbors and
+the difference is large. Squaring and averaging over points gives the roughness;
+comparing it to the roughness of the same values shuffled at random over the
+graph turns it into a scale that depends on neither the effect's amplitude nor
+how many distinct states the component has. Readers who
+know spectral graph theory will recognize the per-point quantity as the graph
+Laplacian applied to the component, $c_S=(I-W)\,g_S$, and the summary as a
+normalized Dirichlet energy \cite{Chung1997,BelkinNiyogi2003}.
+
+\subsection{Definition}
+
+Build a $k$-nearest-neighbor graph in $\Psi_S(x)/\sqrt{M}$ with normalized local
+weights $w_{i\ell}$. The local curvature is
+\begin{equation}
+ c_S(x_i)=\hat g_S(x_i)-\sum_{\ell\in N(i)}w_{i\ell}\,\hat g_S(x_\ell),
+\end{equation}
+Write the roughness $R(g)=N^{-1}\sum_{i=1}^N c_S(x_i)^2$, weighting each graph
+node by the number of points it collapses. The component summary normalizes it by
+its mean under random permutations $\pi$ of the component values over the graph
+nodes,
+\begin{equation}
+ Q_S=\frac{R(\hat g_S)}{\mathbb{E}_\pi\,R(\hat g_S\circ\pi)}.
+\label{eq:curvature}
+\end{equation}
+The permutation null absorbs the graph's size and structure, so $Q_S$ compares a
+component's roughness to what that same graph produces by chance and stays
+comparable across components with very different numbers of distinct states. A
+two-state binary feature sits on a two-node graph whose only permutation leaves
+$R$ unchanged, so $Q_S=1$ rather than a tiny graph inflating it. $Q_S$ is
+amplitude-invariant, since numerator and null scale together, and
+centering-invariant, since a constant added to $g_S$ cancels in $c_S$ (the
+neighbor weights sum to one). A value below $1$ is smoother than chance; a value
+near $1$ carries no smoothness signal, either rough or on too few states to
+resolve. Points whose feature maps coincide are collapsed to one node
+before the neighbor search.
+
+Importance alone cannot tell a broad effect from a narrow one. Two components
+with equal $A_S$ can differ in whether their energy is spread across the input
+space or concentrated at a few thresholds, and $A_S$ assigns both the same
+number. Curvature resolves the ambiguity, so the pair $(A_S,Q_S)$ carries
+information neither coordinate holds alone. High $A_S$ with low $Q_S$ is an
+important broad effect, safely summarized by a simple trend. High $A_S$ with high
+$Q_S$ is an important effect built from thresholds or regimes, worth plotting and
+monitoring because a small input change can move the prediction sharply. Low
+$A_S$ with high $Q_S$ is a weak effect on sparse or discrete support, to inspect
+for data coverage or instability rather than act on. The reading is the same for
+a main effect and an interaction; only the order of $S$ changes.
+
+\subsection{Validation on planted interactions}
+\label{sec:validation}
+
+$Q_S$ is a descriptive statistic, so we test whether it ranks shape as intended
+on data where the shape is known. We draw six independent uniform features and
+build a response with two planted pair effects: a smooth bilinear term on
+$(u_1,u_2)$ and a sharp Gaussian bump on $(u_3,u_4)$, plus additive main effects
+and light noise. We run the full workflow and measure $A_S$ and $Q_S$ on held-out
+points.
+
+Table~\ref{tab:validation} reports the result. The localized bump has eight times
+less variance than the smooth term ($A=0.005$ versus $0.043$) yet more than twice
+the curvature ($Q=0.0040$ versus $0.0015$), the low-importance, high-curvature
+pattern the method is meant to surface. Because $Q_S$ already divides by the
+permutation null, both values sit far below $1$, and the permutation $z$-scores
+($-79$ and $-19$) confirm each component is much smoother than a random labeling
+rather than noise. The ranking is stable across five data seeds
+($Q=0.002\pm0.000$ smooth, $0.005\pm0.000$ localized) and preserved across
+$k\in\{10,15,25\}$.
+
+\begin{table}[ht]
+\centering
+\caption{Curvature validation on planted interactions (held-out points).}
+\label{tab:validation}
+\begin{tabular}{lrrr}
+\toprule
+Planted effect & Importance $A_S$ & Curvature $Q_S$ & Null $z$\\
+\midrule
+Smooth bilinear $(u_1,u_2)$ & 0.0433 & 0.0015 & $-79$\\
+Localized bump $(u_3,u_4)$  & 0.0052 & 0.0040 & $-19$\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Two limits follow from the same experiment. The dynamic range is modest: a sharp
+continuous bump moves $Q_S$ by a factor of about two, not orders of magnitude,
+because a fANOVA component is already a smooth functional over its own feature-map
+graph. And $Q_S$ reads on one scale: a value near the chance ceiling $Q_S\approx1$
+means the component is either rough or carried by too few states to
+resolve, so compare components rather than reading an absolute threshold.
+
+\section{Experiments}
+
+\subsection{Protocol}
+
+We study California housing and UCI hourly bikeshare. Both positive responses are
+transformed by $y=\log(1+\text{target})$. Screening uses five-fold out-of-fold
+GAM residuals. The final GAM, the deep residual model and all component kernels
+are fit or evaluated without held-out labels. The finite-background fANOVA
+estimate uses $96$ reproducible training-background draws. Results reproduce under
+XGBoost 3.0 with pandas 2.2; later XGBoost with pandas 3.0 drops DataFrame
+feature names, so interaction constraints must be passed as integer indices.
+
+\subsection{California housing}
+
+The main-effect GAM reaches a held-out log-scale MAE of $0.1264$. The screened
+deep residual model improves it to $0.1028$; an unrestricted depth-six XGBoost
+reaches $0.0934$. The staged model recovers most of the nonadditive structure
+while keeping an explicit main-effect and interaction hierarchy.
+
+Table~\ref{tab:housing} reports deep-model pair components with centered $A_S$.
+Latitude$\times$Longitude dominates the ANOVA energy but has the lowest
+curvature, consistent with a broad smooth spatial surface. The MedInc pairs are
+far weaker but more localized: MedInc$\times$Population carries a fraction of the
+spatial energy yet an order of magnitude more curvature.
+
+\begin{table}[ht]
+\centering
+\caption{California housing: deep-model fANOVA components (centered $A_S$).}
+\label{tab:housing}
+\begin{tabular}{lrr}
+\toprule
+Interaction & Importance $A_S$ & Curvature $Q_S$\\
+\midrule
+Latitude $\times$ Longitude & 0.00747 & 0.01434\\
+MedInc $\times$ AveRooms    & 0.00092 & 0.03689\\
+MedInc $\times$ AveOccup    & 0.00032 & 0.06048\\
+MedInc $\times$ Population   & 0.00030 & 0.15196\\
+MedInc $\times$ HouseAge    & 0.00021 & 0.09240\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Bikeshare}
+
+For hourly bikeshare the response is $\log(1+\texttt{cnt})$. The GAM reaches a
+held-out log-scale MAE of $0.4409$; the screened deep residual model reaches
+$0.2761$. Table~\ref{tab:bike} separates importance from shape.
+Hour$\times$weekday is the most important interaction; hour$\times$workingday is
+smaller but twice as curved, matching the abrupt commute-hour switch between
+working and non-working days. Month$\times$year is weak in energy yet the most
+curved pair ($Q=0.71$), a sparse seasonal adjustment that varies year to year.
+The support-invariant curvature also corrects a reading the raw statistic got
+wrong: holiday$\times$month looked highly curved under a variance normalization,
+but against its own permutation null it sits at $Q=0.055$, so it is weak and
+smooth rather than a sharp regime. Its earlier high value came from a 21-state
+graph, the small-support inflation the null normalization removes.
+
+\begin{table}[ht]
+\centering
+\caption{Bikeshare: deep-model fANOVA components (centered $A_S$).}
+\label{tab:bike}
+\begin{tabular}{lrr}
+\toprule
+Interaction & Importance $A_S$ & Curvature $Q_S$\\
+\midrule
+hour $\times$ weekday    & 0.03862 & 0.19724\\
+hour $\times$ workingday & 0.02392 & 0.39681\\
+humidity $\times$ windspeed & 0.00560 & 0.05957\\
+hour $\times$ temperature & 0.00468 & 0.05311\\
+month $\times$ year      & 0.00189 & 0.70816\\
+holiday $\times$ month   & 0.00086 & 0.05493\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Main effects}
+
+Importance and curvature apply to every fANOVA component, not only interactions.
+Tables~\ref{tab:housing-main} and \ref{tab:bike-main} report the first-order
+components of the full model $f=f_1+g_{\mathrm{deep}}$. Two readings carry over
+from the interactions, and one caveat becomes concrete.
+
+Main effects hold most of the explained variation. On California the three
+leading main effects (MedInc, Latitude, Longitude) have importance
+$0.02$--$0.04$, an order of magnitude above the strongest interaction
+(Latitude$\times$Longitude at $0.0075$); on bikeshare the hour-of-day effect
+alone has importance $1.30$, far above any interaction. The additive backbone
+dominates, as the staged construction intends.
+
+Among the leading effects, low curvature marks broad dependence and higher
+curvature marks structure. California's MedInc, Latitude and Longitude are smooth
+($Q\le 0.011$), consistent with monotone price gradients; bikeshare's hour-of-day
+effect is the largest and also the most curved of its continuous-scale features
+($Q=0.39$), matching the twin commute peaks a smooth trend would miss, while
+temperature is smooth ($Q=0.011$). The weak effects are the curved ones:
+California's HouseAge carries almost no energy ($A=0.0001$) yet $Q=0.17$, a sparse
+local wiggle to inspect for data support rather than a broad effect to act on.
+
+The two-state calendar features (year, holiday, workingday) show the support
+normalization at work. Each sits on a two-node graph whose single permutation
+leaves the roughness unchanged, so $Q_S$ pins to the chance value $1$ instead of
+the inflated $Q>30$ a variance normalization gave holiday. A value at the ceiling
+reflects that two states cannot express curvature, not a spurious spike.
+
+\begin{table}[ht]
+\centering
+\caption{California housing: main-effect importance and curvature (centered).}
+\label{tab:housing-main}
+\begin{tabular}{lrrr}
+\toprule
+Feature & Importance $A_j$ & Curvature $Q_j$ & States\\
+\midrule
+Latitude   & 0.04398 & 0.01145 & 208\\
+Longitude  & 0.04348 & 0.00894 & 236\\
+MedInc     & 0.02327 & 0.00621 & 256\\
+AveOccup   & 0.00507 & 0.00438 & 256\\
+AveRooms   & 0.00162 & 0.03043 & 255\\
+AveBedrms  & 0.00025 & 0.05422 & 252\\
+HouseAge   & 0.00012 & 0.17430 & 52\\
+Population & 0.00008 & 0.07127 & 212\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[ht]
+\centering
+\caption{Bikeshare: main-effect importance and curvature (centered). Two-state
+features (year, holiday, workingday) sit on degenerate two-node graphs and pin to
+the chance value $Q_j=1$.}
+\label{tab:bike-main}
+\begin{tabular}{lrrr}
+\toprule
+Feature & Importance $A_j$ & Curvature $Q_j$ & States\\
+\midrule
+hour        & 1.30207 & 0.38958 & 24\\
+temperature & 0.09661 & 0.01071 & 48\\
+year        & 0.04690 & 1.00000 & 2\\
+month       & 0.01766 & 0.83008 & 12\\
+weathersit  & 0.01564 & 0.71586 & 4\\
+humidity    & 0.01314 & 0.10098 & 80\\
+windspeed   & 0.00500 & 0.11322 & 26\\
+weekday     & 0.00399 & 0.93946 & 7\\
+holiday     & 0.00111 & 1.00000 & 2\\
+workingday  & 0.00020 & 1.00000 & 2\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Discussion}
+\label{sec:disc}
+
+The method keeps three questions apart. Tree depth and fANOVA determine
+interaction order. Centered ANOVA energy measures global importance. Curvature
+describes local shape, and it augments importance rather than standing in for it.
+
+One caution remains from the construction. The permutation null makes $Q_S$
+comparable across components of different support cardinality, and a two-node
+binary graph pins to $Q_S=1$ rather than inflating, but the null cannot
+manufacture resolution the support does not contain. A component on very few
+states reports the chance value $1$, which says curvature is unresolved there, not
+that the effect is rough. Read a $Q_S$ near $1$ as no signal, and rely on it as a
+shape measure only for components with enough distinct states to populate the
+graph.
+
+The method explains the fitted model, not the data-generating mechanism, and
+should not be read causally. The reference measure sets what ``importance'' and
+``orthogonality'' mean; we use the joint empirical background and state it,
+because under correlated predictors a product-measure decomposition would differ.
+
+\section{Conclusion}
+
+\IIGBM{} runs from tree structure to interaction order, PSD component kernels, and
+local curvature, all induced by the fitted model. fANOVA identifies which
+interaction the model uses; component curvature, validated against interactions
+of known shape, describes how that interaction behaves locally.
+
+\begin{thebibliography}{9}
+\bibitem{Sudjianto2025}
+A. Sudjianto.
+\newblock From Classical ANOVA to Gradient Boosted Trees: A Functional ANOVA
+Perspective on Inherently Interpretable Models.
+\newblock SSRN Working Paper 5315091, 2025.
+\newblock \url{https://papers.ssrn.com/sol3/papers.cfm?abstract_id=5315091}.
+
+\bibitem{Hu2023}
+L. Hu, V. N. Nair, A. Sudjianto, A. Zhang, and J. Chen.
+\newblock Interpretable Machine Learning based on Functional ANOVA Framework:
+Algorithms and Comparisons.
+\newblock arXiv:2305.15670, 2023.
+
+\bibitem{SudjiantoZhang2026}
+A. Sudjianto and A. Zhang.
+\newblock Generalized Nadaraya--Watson Operators for Learned Kernel Geometry: A
+Unified View of Gradient-Boosted Trees, Kernel Regression and Self-Attention.
+\newblock SSRN Working Paper 6823639, 2026.
+\newblock \url{https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6823639}.
+
+\bibitem{Chung1997}
+F. R. K. Chung.
+\newblock \emph{Spectral Graph Theory}.
+\newblock American Mathematical Society, 1997.
+
+\bibitem{BelkinNiyogi2003}
+M. Belkin and P. Niyogi.
+\newblock Laplacian Eigenmaps for Dimensionality Reduction and Data
+Representation.
+\newblock \emph{Neural Computation}, 15(6):1373--1396, 2003.
+
+\bibitem{Hooker2007}
+G. Hooker.
+\newblock Generalized Functional ANOVA Diagnostics for High-Dimensional
+Functions of Dependent Variables.
+\newblock \emph{Journal of Computational and Graphical Statistics},
+16(3):709--732, 2007.
+
+\bibitem{Lengerich2020}
+B. Lengerich, S. Tan, C.-H. Chang, G. Hooker, and R. Caruana.
+\newblock Purifying Interaction Effects with the Functional ANOVA: An Efficient
+Algorithm for Recovering Identifiable Additive Models.
+\newblock In \emph{AISTATS}, 2020.
+
+\bibitem{Friedman2001}
+J. H. Friedman.
+\newblock Greedy Function Approximation: A Gradient Boosting Machine.
+\newblock \emph{The Annals of Statistics}, 29(5):1189--1232, 2001.
+
+\bibitem{ChenGuestrin2016}
+T. Chen and C. Guestrin.
+\newblock XGBoost: A Scalable Tree Boosting System.
+\newblock In \emph{Proceedings of KDD}, 2016.
+\end{thebibliography}
+
+\end{document}

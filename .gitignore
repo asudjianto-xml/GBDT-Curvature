@@ -1,0 +1,23 @@
+# python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# generated outputs (regenerate by running the scripts)
+artifacts/
+catboost_info/
+
+# abandoned exploration
+deprecated/
+
+# latex aux
+*.aux
+*.log
+*.out
+*.synctex.gz
+
+# PDFs: keep the .tex source in the repo, not compiled/third-party PDFs
+*.pdf
+
+# bikeshare data (download from UCI; see README)
+hour.csv
