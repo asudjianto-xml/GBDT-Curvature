@@ -95,8 +95,10 @@ python make_tutorial.py
 jupyter nbconvert --to notebook --execute --inplace IIGBM_tutorial.ipynb
 ```
 
-Figures and tables are written to `artifacts/` (git-ignored). The papers reference
-those figures, so run the scripts above before compiling the `.tex`.
+Running the scripts writes figures and tables to `artifacts/` (git-ignored). The
+papers compile as committed: `gbdt_curvature.tex` pulls its figures from the tracked
+`figures/` folder and the tables are inlined. Rerun the scripts to regenerate the
+numbers and figures.
 
 ## Data
 
