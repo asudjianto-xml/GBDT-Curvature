@@ -1,0 +1,369 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,booktabs,hyperref,graphicx,microtype}
+\hypersetup{colorlinks=true,citecolor=blue,urlcolor=blue,linkcolor=blue}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\D}{\Delta}
+
+\title{Curvature of Gradient-Boosted Trees:\\
+Main Effects as Bending, Interactions as Off-Diagonal Curvature,\\
+and Depth as Curvature Order}
+\author{Nupur Krishnan \and Agus Sudjianto}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Curvature is a second-order notion, and for a fitted predictor its second-order
+structure splits in two: how each feature's effect bends along its own axis, and
+how two features bend jointly. The second is the interaction. We define both for
+gradient-boosted decision trees (GBDTs), which are piecewise constant and have no
+classical Hessian, using finite-difference operators against a background
+distribution. A main effect is a first difference, an interaction is a mixed
+second difference and an order-$|S|$ effect is an $|S|$-fold difference;
+interactions are the off-diagonal entries of this discrete Hessian. The same
+object is read from the model-induced kernel: the component kernel's feature map
+is the mixed-difference response, its diagonal $K_S(x,x)$ is a per-point
+interaction-energy field and an additive model has a separable kernel. Tree depth
+bounds the order of mixed difference a model can carry, so depth corresponds to
+interaction order. On simulated data the kernel detects a planted interaction at
+$267\times$ the energy of a permitted-but-absent one, recovers its shape at
+Spearman $0.98$ and localizes where it fires at $0.98$, and each planted order is
+captured when depth reaches it. On California housing and bikeshare an
+importance matrix and a Hessian matrix, sharing the interaction off-diagonal,
+identify the interacting pairs and separate important-but-linear main effects from
+curved ones, and the depth-order curve places California's effective interaction
+order near two and bikeshare's near three.
+\end{abstract}
+
+\medskip
+\noindent\textbf{Keywords:} gradient boosting; functional ANOVA; interactions;
+curvature; discrete Hessian; model-induced kernel; interaction detection; tree depth.
+
+\section{Introduction}
+
+A fitted model's first-order structure is its gradient: how the prediction moves
+as one feature changes. Its second-order structure is the Hessian, and the
+Hessian has two parts. The diagonal $\partial^2 f/\partial x_j^2$ is how the
+effect of $x_j$ bends along its own axis. The off-diagonal
+$\partial^2 f/\partial x_j\partial x_k$ is how the slope in $x_j$ changes as $x_k$
+moves, which is the interaction between $x_j$ and $x_k$. A model is additive
+exactly when every off-diagonal vanishes, so an interaction is nonzero
+off-diagonal curvature.
+
+Gradient-boosted trees complicate this because they are piecewise constant: the
+classical Hessian is zero inside a leaf and undefined at split faces. We replace
+derivatives with finite differences against a background distribution and recover
+the same split. A main effect is a first difference in one coordinate; an
+interaction is a mixed second difference in two; an order-$|S|$ effect is the
+$|S|$-fold mixed difference. This is the functional ANOVA (fANOVA) reading of tree
+ensembles \cite{Sudjianto2025,Hu2023}, read here as a curvature statement.
+
+Three results follow. First, the interaction is visible in the model-induced
+kernel: the component kernel's feature map is the mixed-difference response, its
+diagonal is a per-point interaction-energy field and an additive model has a
+kernel that separates into a sum over single features \cite{SudjiantoZhang2026}.
+Second, tree depth bounds the order of mixed difference the model can represent,
+so depth corresponds to interaction order rather than to local sharpness. Third,
+both statements are testable, and we test them on simulated data with known
+structure and on California housing and bikeshare.
+
+\section{Curvature of a fitted model}
+
+\subsection{The Hessian and its two parts}
+
+For a twice-differentiable $f$, the Hessian $H_{jk}(x)=\partial^2 f/\partial
+x_j\partial x_k$ carries the second-order behavior. The diagonal $H_{jj}$ is the
+self-curvature of feature $j$: how sharply its effect bends. The off-diagonal
+$H_{jk}$ ($j\neq k$) is the interaction: the part of the curvature that couples
+two directions, the twist of the surface. Additivity is the statement that $H$ is
+diagonal everywhere.
+
+\subsection{Discrete curvature for piecewise-constant models}
+
+A tree ensemble has no usable Hessian, so fix a background measure with draws
+$B^{(1)},\dots,B^{(M)}$ and define difference operators. The main-effect (first
+difference) and interaction (mixed second difference) contrasts are
+\begin{align}
+ \Psi_j(x)   &= \E_b\!\big[f(x_j,b_{-j})-f(b)\big],\\
+ \Psi_{jk}(x)&= \E_b\!\big[f(x_j,x_k,b_{-jk})-f(x_j,b_{-j})-f(x_k,b_{-k})+f(b)\big].
+\label{eq:contrasts}
+\end{align}
+$\Psi_j$ is the discrete $\partial_j f$ and $\Psi_{jk}$ is the discrete
+$\partial^2_{jk}f$: the inclusion--exclusion in \eqref{eq:contrasts} is exactly
+the mixed second difference $\D_j\D_k f$. The general order-$|S|$ contrast is the
+$|S|$-fold difference
+\begin{equation}
+ \Psi_S(x)=\E_b\Big[\textstyle\sum_{T\subseteq S}(-1)^{|S|-|T|}\,f(x_T,b_{-T})\Big],
+\label{eq:contrastS}
+\end{equation}
+the discrete $|S|$-th mixed derivative. The fANOVA decomposition of $f$ is
+therefore a grading by the order of its mixed-difference tensor: gradient gives
+main effects, the off-diagonal Hessian gives pairwise interactions, the
+third-order tensor gives triple interactions. Fitting the deep component on the
+main-effect residual makes $\Psi_S$ orthogonal to lower orders under the
+background measure \cite{Hu2023}, so the estimate is the pure order-$|S|$ part.
+
+\subsection{Curvature energy and two matrices}
+
+The energy of a difference is $A_S=\E[(\E_b\Psi_S)^2]=\mathrm{Var}(g_S)$ with
+$g_S=\E_b\Psi_S$ centered. Two second-order objects organize the model. The
+interaction between $j$ and $k$ is the mixed second difference $\Psi_{jk}$, with
+energy $A_{jk}$: the off-diagonal curvature coupling the two features. The
+self-curvature of feature $j$ is the self second difference
+\begin{equation}
+ \Psi_{jj}(x)=\E_b\!\big[f(x_j{+}h,b_{-j})-2f(x_j,b_{-j})+f(x_j{-}h,b_{-j})\big],
+\end{equation}
+the discrete $\partial^2 f/\partial x_j^2$, with energy $A_{jj}$: how much the
+main effect bends. A two-state feature has no interior step, so $A_{jj}=0$; its
+main effect is a level shift, not a bend.
+
+These give two matrices with a shared off-diagonal. The Hessian matrix
+$H_{jk}=A_{jk}$, $H_{jj}=A_{jj}$ has a second difference in every entry, so it is
+consistent in derivative order, and additive $f$ makes it diagonal. The importance
+matrix $C_{jk}=A_{jk}$, $C_{jj}=A_j$ keeps the interaction off-diagonal but records
+the first-difference energy of the main effect on the diagonal. Both are
+consistent with the model-induced kernel: every entry is the mean local energy
+$\E[K_S(x,x)]$ of the corresponding component's kernel (Section~\ref{sec:kernel}).
+They differ only in whether the diagonal reads a main effect's importance or its
+bending, so a feature can be important and linear (large $C_{jj}$, small $H_{jj}$)
+or important and nonlinear.
+
+\section{The model-induced kernel view}
+\label{sec:kernel}
+
+\subsection{Leaf co-membership kernel}
+
+A fitted tree induces a kernel. Route $x$ to its leaf $\ell(x)$, write the one-hot
+$z(x)=e_{\ell(x)}$, and $K_T(x,x')=z(x)^\top z(x')=\mathbf 1\{\ell(x)=\ell(x')\}$
+is positive semidefinite since the Gram matrix is $ZZ^\top$. A GBDT sums these, so
+two points are close when the ensemble routes them together
+\cite{SudjiantoZhang2026}.
+
+\subsection{Component kernel and non-separability}
+
+The interaction contrast supplies a feature map $\Psi_S(x)\in\mathbb R^M$ and a PSD
+kernel $K_S(x,x')=\tfrac1M\Psi_S(x)^\top\Psi_S(x')$: the same recipe with the
+model's mixed-difference response in place of leaf indicators. Because each deep
+tree is constrained to one pair, its leaf map depends jointly on $(x_j,x_k)$ and
+does not separate, so the model kernel decomposes as $K=\sum_S K_S$ and the
+off-diagonal blocks are the interactions. In kernel terms an interaction is a
+non-separable block: an additive model has $K=\sum_j K_j$, and the mixed-derivative
+operator $\D_j\D_k$ corresponds to the product kernel $k_j\,k_k$, the order-$|S|$
+term of the ANOVA-kernel expansion $\prod_j(1+k_j)=\sum_S\prod_{j\in S}k_j$.
+
+\subsection{Local interaction-energy field}
+
+The diagonal of the component Gram matrix is a per-point field,
+\begin{equation}
+ K_S(x,x)=\tfrac1M\lVert\Psi_S(x)\rVert^2,
+\end{equation}
+the local squared mixed curvature: where in input space the interaction fires. Its
+average is the importance $A_S$. So the kernel gives both a scalar strength and a
+map of where the interaction is active.
+
+\section{Depth and the order of curvature}
+
+A depth-$d$ tree partitions on at most $d$ features along any root-to-leaf path, so
+its output is a sum of terms each depending on at most $d$ features. Sums of such
+trees stay order-$d$. Depth therefore bounds the order of mixed difference the
+model can carry: a depth-$d$ ensemble represents interactions up to order $d$ and
+none higher. Depth buys interaction order, not local sharpness, which is set
+instead by the number of splits and boosting rounds at a fixed order. The clean
+prediction is that an order-$m$ effect is captured when depth first reaches $m$.
+
+\section{Experiments}
+
+\subsection{Protocol}
+
+Positive responses are transformed by $y=\log(1+\text{target})$. Contrasts use $96$
+background draws. On the real data the effect-energy matrix and interaction fields
+come from an unconstrained depth-six XGBoost; the depth-order curve fits
+unconstrained models at each depth and scores held-out mean squared error. Models
+run under XGBoost 3.0.
+
+\subsection{Simulated: detection, recovery and localization}
+
+We draw five independent uniform features, plant one localized interaction on
+$(u_1,u_2)$ (a Gaussian bump in a corner) and leave $(u_3,u_4)$ additive, then fit
+the staged model with both pairs permitted. Table~\ref{tab:sim-kernel} reports the
+kernel view against the true purified interaction. The kernel detects the planted
+pair at $267\times$ the energy of the permitted-but-absent pair, recovers the
+component shape at Spearman $0.98$ and localizes where it fires at $0.98$; the
+absent pair's field is flat ($3\times10^{-4}$ versus $6.6\times10^{-2}$).
+Figure~\ref{fig:kernel} shows the true interaction, the estimated component and
+the kernel diagonal share the same corner.
+
+\begin{table}[ht]
+\centering
+\caption{Simulated kernel view: planted interaction on $(u_1,u_2)$, absent on $(u_3,u_4)$.}
+\label{tab:sim-kernel}
+\begin{tabular}{lr}
+\toprule
+Quantity & Value\\
+\midrule
+detection: $A_{12}$ (planted) / $A_{34}$ (absent) & $267\times$\\
+recovery: Spearman(estimated component, true interaction) & $+0.983$\\
+localization: Spearman(kernel diagonal, true interaction energy) & $+0.984$\\
+absent-pair field: mean $K_{34}(x,x)$ / mean $K_{12}(x,x)$ & $0.005$\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\textwidth]{artifacts/kernel_view_test.png}
+\caption{True purified interaction, estimated component and kernel diagonal
+$K_{12}(x,x)$ over $(u_1,u_2)$. The kernel diagonal is a local interaction-energy field.}
+\label{fig:kernel}
+\end{figure}
+
+\subsection{Simulated: depth and order}
+
+We plant a pure two-way interaction on $(u_1,u_2)$ and a pure three-way
+interaction on $(u_3,u_4,u_5)$, both centered products with no lower-order
+content, and fit unconstrained models at depth $1$ to $4$.
+Table~\ref{tab:sim-depth} shows each order is recovered when depth reaches it: the
+two-way recovery jumps from $-0.71$ at depth $1$ to $+0.97$ at depth $2$, and the
+three-way from $+0.42$ at depth $2$ to $+0.93$ at depth $3$. A depth-two model
+cannot represent the three-way term at any number of trees; the recovery stays
+flat until depth three. Held-out error falls with depth and flattens after depth
+three, where no higher order remains (Figure~\ref{fig:depth}).
+
+\begin{table}[ht]
+\centering
+\caption{Simulated depth and order. Recovery is Spearman of the model's order-$m$
+contrast against the planted order-$m$ component.}
+\label{tab:sim-depth}
+\begin{tabular}{lrrr}
+\toprule
+Depth & Held-out MSE & Recover 2-way & Recover 3-way\\
+\midrule
+1 & 0.341 & $-0.712$ & $+0.467$\\
+2 & 0.077 & $+0.974$ & $+0.418$\\
+3 & 0.045 & $+0.983$ & $+0.928$\\
+4 & 0.036 & $+0.986$ & $+0.941$\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\textwidth]{artifacts/depth_order_test.png}
+\caption{Left: held-out error versus depth. Right: component recovery versus depth;
+the two-way effect turns on at depth two, the three-way at depth three.}
+\label{fig:depth}
+\end{figure}
+
+\subsection{California housing}
+
+The interaction off-diagonal (shared by both matrices) is dominated by
+Latitude$\times$Longitude ($A=0.0082$), followed by MedInc$\times$Latitude
+($0.0028$) and MedInc$\times$Longitude ($0.0023$): the income effect varies by
+location, and location interacts with itself as a spatial surface. The two
+diagonals separate importance from bending. MedInc is the third most important
+main effect ($A_j=0.026$) yet nearly linear (self-curvature $0.0005$), while
+Latitude and Longitude are both important and curved ($A_j=0.067,0.048$;
+self-curvature $0.0049,0.0044$) and AveOccup is weak in importance but relatively
+curved ($0.006$; $0.0025$). The interaction field for Latitude$\times$Longitude
+(Figure~\ref{fig:cal}, right) concentrates along the coast. The depth-order MSE is
+$0.0364,0.0257,0.0220,0.0206,0.0190,0.0183$ for depth $1$ to $6$: the largest drop
+is depth one to two ($0.011$) and the curve flattens by depth three, so the
+effective interaction order is near two.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\textwidth]{artifacts/curvature_california_housing.png}
+\caption{California housing. Left: importance matrix (diagonal is main-effect
+energy $A_j$). Center: Hessian matrix (diagonal is self-curvature $A_{jj}$). Both
+share the interaction off-diagonal. Right: local interaction field for the top pair.}
+\label{fig:cal}
+\end{figure}
+
+\subsection{Bikeshare}
+
+Hour$\times$workingday dominates the interaction off-diagonal ($A=0.153$),
+eighteen times the next pair (hour$\times$weekday, $0.008$): the commute shape of
+ridership depends on whether the day is a working day. On the diagonal, the
+self-curvature is exactly zero for the two-state features (year, holiday,
+workingday), because a binary main effect is a level shift and cannot bend; the
+discrete Hessian reports that without the normalization artifact a variance-scaled
+curvature would produce. Hour is both the most important main effect ($A_j=1.41$)
+and the most curved (self-curvature $0.14$, the twin commute peaks); month is more
+curved ($0.043$) than important ($0.031$), a strongly nonlinear seasonal cycle;
+temperature is important but smooth. The depth-order MSE is
+$0.395,0.219,0.117,0.098,0.090,0.087$: large drops at both depth two ($0.176$) and
+depth three ($0.102$), then a flat tail, so bikeshare carries three-way
+calendar structure and its effective order is near three. The two depth-order
+curves separate an order-two dataset from an order-three one.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\textwidth]{artifacts/curvature_bikeshare.png}
+\caption{Bikeshare. Left: importance matrix. Center: Hessian matrix, with
+self-curvature zero for the binary features. Right: local interaction field for
+hour$\times$workingday.}
+\label{fig:bike}
+\end{figure}
+
+\section{Discussion}
+
+The framework separates two things depth is often asked to explain. Interaction
+order is how many features act jointly, set by depth. Local sharpness is how
+abruptly one effect changes, set by splits and rounds at fixed order. A per-point
+attempt to predict required depth from local sharpness fails once level and other
+covariates are controlled, because sharpness is the wrong axis; the axis depth
+controls is order, and order is read from the mixed-difference tensor and its
+kernel blocks.
+
+The estimates depend on the background measure, which sets what a main effect and
+an interaction mean; under correlated predictors the components are not exactly
+orthogonal and the effect-energy matrix inherits that. The interaction field
+$K_S(x,x)$ is a within-model quantity and should not be read causally.
+
+\section{Conclusion}
+
+Interactions are the off-diagonal curvature of a fitted model, estimated for
+piecewise-constant trees as mixed second differences and read directly from the
+model-induced kernel, whose diagonal maps where each interaction fires. Tree depth
+sets the order of mixed curvature a model can carry, so the depth at which
+held-out error flattens measures a dataset's effective interaction order: near two
+for California housing, near three for bikeshare.
+
+\begin{thebibliography}{9}
+\bibitem{Sudjianto2025}
+A. Sudjianto.
+\newblock From Classical ANOVA to Gradient Boosted Trees: A Functional ANOVA
+Perspective on Inherently Interpretable Models.
+\newblock SSRN Working Paper 5315091, 2025.
+
+\bibitem{Hu2023}
+L. Hu, V. N. Nair, A. Sudjianto, A. Zhang, and J. Chen.
+\newblock Interpretable Machine Learning based on Functional ANOVA Framework:
+Algorithms and Comparisons.
+\newblock arXiv:2305.15670, 2023.
+
+\bibitem{SudjiantoZhang2026}
+A. Sudjianto and A. Zhang.
+\newblock Generalized Nadaraya--Watson Operators for Learned Kernel Geometry.
+\newblock SSRN Working Paper 6823639, 2026.
+
+\bibitem{Hooker2007}
+G. Hooker.
+\newblock Generalized Functional ANOVA Diagnostics for High-Dimensional Functions
+of Dependent Variables.
+\newblock \emph{Journal of Computational and Graphical Statistics}, 16(3):709--732, 2007.
+
+\bibitem{FriedmanPopescu2008}
+J. H. Friedman and B. E. Popescu.
+\newblock Predictive Learning via Rule Ensembles.
+\newblock \emph{The Annals of Applied Statistics}, 2(3):916--954, 2008.
+
+\bibitem{ChenGuestrin2016}
+T. Chen and C. Guestrin.
+\newblock XGBoost: A Scalable Tree Boosting System.
+\newblock In \emph{Proceedings of KDD}, 2016.
+\end{thebibliography}
+
+\end{document}
