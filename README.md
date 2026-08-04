@@ -55,6 +55,8 @@ components).
 | `IIGBM_tutorial.ipynb` | Tutorial: trees→kernel, staged model, components, curvature, plots |
 | `kernel_view_test.py` | Simulated: interaction = off-diagonal curvature; kernel detection, recovery, localization |
 | `depth_order_test.py` | Simulated: depth = interaction order (each order captured at its depth) |
+| `gbdt_laplacian_test.py` | Simulated: finite-difference curvature vs the GBDT-kernel graph Laplacian (which does not localize interactions) |
+| `invariance_test.py` | Simulated: the interaction is reparametrization-invariant (metric-free), the self-curvature is not |
 | `real_curvature_experiments.py` | California + bikeshare: importance and Hessian matrices, interaction fields, depth-order curves |
 | `california_housing_staged_interactions.py` | Stage I–III on California; writes screened pairs + MAE |
 | `california_housing_deep_anova_kernel_curvature.py` | Core kernel + curvature functions; California component tables |
@@ -78,6 +80,8 @@ pip install "xgboost==3.0.*" "pandas==2.2.*" "scikit-learn>=1.4" numpy scipy mat
 # Curvature paper experiments
 python kernel_view_test.py            # interaction = off-diagonal curvature (simulated)
 python depth_order_test.py            # depth = interaction order (simulated)
+python gbdt_laplacian_test.py         # finite differences vs GBDT-kernel Laplacian
+python invariance_test.py             # metric-free interaction vs metric-dependent self-curvature
 python real_curvature_experiments.py  # matrices + fields + depth-order (California, bikeshare)
 
 # IIGBM pipeline (run staged first: it writes the screened-pairs file the next script reads)

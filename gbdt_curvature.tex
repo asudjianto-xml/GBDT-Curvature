@@ -123,15 +123,27 @@ These give two matrices with a shared off-diagonal. The Hessian matrix
 $H_{jk}=A_{jk}$, $H_{jj}=A_{jj}$ has a second difference in every entry, so it is
 consistent in derivative order, and additive $f$ makes it diagonal. The importance
 matrix $C_{jk}=A_{jk}$, $C_{jj}=A_j$ keeps the interaction off-diagonal but records
-the first-difference energy of the main effect on the diagonal. Both are
-consistent with the model-induced kernel: every entry is the mean local energy
-$\E[K_S(x,x)]$ of the corresponding component's kernel (Section~\ref{sec:kernel}).
+the first-difference energy of the main effect on the diagonal. Both are read from
+the model-induced kernel: each entry averages the local curvature energy
+$K_S(x,x)$ of the corresponding component's kernel (Section~\ref{sec:kernel}).
 They differ only in whether the diagonal reads a main effect's importance or its
 bending, so a feature can be important and linear (large $C_{jj}$, small $H_{jj}$)
 or important and nonlinear.
 
 \section{The model-induced kernel view}
 \label{sec:kernel}
+
+Section~2 built curvature from the difference operators $\Psi_S$. The
+model-induced kernel is that same object seen as a geometry on points: its feature
+map is $\Psi_S$ itself, so the kernel carries the curvature rather than
+approximating it. The kernel connects to Section~2 in three ways. First, the pair kernel's feature map is the mixed second
+difference, so $K_{jk}$ is the Gram matrix of the off-diagonal Hessian response;
+the singleton and self-difference maps give the main-effect and diagonal blocks
+the same way. Second, its diagonal $K_S(x,x)$ is the local curvature energy at
+$x$, and averaging that diagonal returns the effect matrix entry $A_S$, so the two
+matrices of Section~2 are the averaged kernel diagonals of the component kernels.
+Third, an interaction is nonzero off-diagonal curvature, which in kernel terms is a
+non-separable block, so additivity is separability of the kernel.
 
 \subsection{Leaf co-membership kernel}
 
@@ -143,9 +155,10 @@ two points are close when the ensemble routes them together
 
 \subsection{Component kernel and non-separability}
 
-The interaction contrast supplies a feature map $\Psi_S(x)\in\mathbb R^M$ and a PSD
-kernel $K_S(x,x')=\tfrac1M\Psi_S(x)^\top\Psi_S(x')$: the same recipe with the
-model's mixed-difference response in place of leaf indicators. Because each deep
+The interaction contrast of Section~2 is the feature map $\Psi_S(x)\in\mathbb R^M$,
+so $K_S(x,x')=\tfrac1M\Psi_S(x)^\top\Psi_S(x')$ is the Gram matrix of the mixed
+second difference: the off-diagonal Hessian response, in place of the leaf
+indicators above. Because each deep
 tree is constrained to one pair, its leaf map depends jointly on $(x_j,x_k)$ and
 does not separate, so the model kernel decomposes as $K=\sum_S K_S$ and the
 off-diagonal blocks are the interactions. In kernel terms an interaction is a
@@ -159,9 +172,12 @@ The diagonal of the component Gram matrix is a per-point field,
 \begin{equation}
  K_S(x,x)=\tfrac1M\lVert\Psi_S(x)\rVert^2,
 \end{equation}
-the local squared mixed curvature: where in input space the interaction fires. Its
-average is the importance $A_S$. So the kernel gives both a scalar strength and a
-map of where the interaction is active.
+the local squared mixed curvature: where in input space the interaction fires.
+Averaging the diagonal returns the effect matrix entry, with large-background
+limit $g_S(x)^2$ whose mean is $A_S$, so the matrices of Section~2 are the averaged
+kernel diagonals and the self-difference map $\Psi_{jj}$ supplies the Hessian
+diagonal $A_{jj}$. The kernel gives both a scalar strength and a map of where the
+effect is active.
 
 \section{Depth and the order of curvature}
 
@@ -309,7 +325,7 @@ hour$\times$workingday.}
 
 \section{Discussion}
 
-The framework separates two things depth is often asked to explain. Interaction
+This separates two things depth is often asked to explain. Interaction
 order is how many features act jointly, set by depth. Local sharpness is how
 abruptly one effect changes, set by splits and rounds at fixed order. A per-point
 attempt to predict required depth from local sharpness fails once level and other
@@ -317,9 +333,23 @@ covariates are controlled, because sharpness is the wrong axis; the axis depth
 controls is order, and order is read from the mixed-difference tensor and its
 kernel blocks.
 
+The two curvatures also differ in geometry. The interaction contrast $\Psi_{jk}$
+substitutes feature values against the background and uses no step or distance, so
+it is metric-free: a monotone reparametrization of a feature leaves the interaction
+energy unchanged (zero change when $u_0$ and $u_2$ are squared) and it applies to
+categorical features directly. The self-curvature $\Psi_{jj}$ needs a step $h$ in
+the coordinate's own scale, so it is metric-dependent; the same squaring moved it
+by $525\%$, and it is undefined for unordered categoricals. The Euclidean Hessian
+is thus an idealization that fits only the diagonal, while the off-diagonal is a
+functional-ANOVA object. The model-induced kernel is a third, learned geometry,
+anisotropic and coordinate-free, so its graph Laplacian measures aggregate
+roughness rather than a named interaction: on the planted example it correlated
+$-0.07$ with the true interaction against $0.95$ for the finite-difference field.
+It describes the shape of an already-named component, not which features interact.
+
 The estimates depend on the background measure, which sets what a main effect and
 an interaction mean; under correlated predictors the components are not exactly
-orthogonal and the effect-energy matrix inherits that. The interaction field
+orthogonal and both matrices inherit that. The interaction field
 $K_S(x,x)$ is a within-model quantity and should not be read causally.
 
 \section{Conclusion}
